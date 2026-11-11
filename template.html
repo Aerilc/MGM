@@ -346,7 +346,7 @@ button{font:inherit;color:inherit}
 
 <section id="view-library" class="page-sec" aria-label="全库">
   <h2 class="sec-head"><span class="sec-no mono">〔 全库 〕</span><span class="sec-title">全部 __TOTAL__ 条</span></h2>
-  <p class="sec-note">分区、来源、时间、更新四组药丸之间是「并且」关系，组内单选；点已选中的药丸或「清空」可取消。搜索与 Ctrl+K 浮层共用同一套匹配：标题、机构、栏目、区域、主管部门都可搜。「更新」一组按发现日期筛：今日新增＝__TODAY__ 抓到的，昨日新增＝__YDAY__ 抓到的，全部新到＝历次抓到的全部新条目，与「刚出炉」按发布日期的口径不同，同样与其它筛选叠加生效。</p>
+  <p class="sec-note">分区、类别、来源、时间、更新五组药丸之间是「并且」关系，组内单选；点已选中的药丸或「清空」可取消。类别按栏目的性质归拢：政策文件、政策解读、通知公告、新闻动态、数据发布、互动征集，外加兑现专区的申报项目。搜索与 Ctrl+K 浮层共用同一套匹配：标题、机构、栏目、区域、主管部门都可搜。「更新」一组按发现日期筛：今日新增＝__TODAY__ 抓到的，昨日新增＝__YDAY__ 抓到的，全部新到＝历次抓到的全部新条目，与「刚出炉」按发布日期的口径不同，同样与其它筛选叠加生效。</p>
   <div class="lib-tools">
     <div class="search-box">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#6E5A3E" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.8-3.8"/></svg>
@@ -361,6 +361,7 @@ button{font:inherit;color:inherit}
     <button type="button" class="clear-btn" id="clearFilters" hidden>清空全部筛选</button>
   </div>
   <div class="pill-group"><span class="pg-label">〔 分区 〕</span><div class="pills" id="zonePills"></div></div>
+  <div class="pill-group"><span class="pg-label">〔 类别 〕</span><div class="pills" id="famPills"></div></div>
   <div class="pill-group"><span class="pg-label">〔 来源 〕</span><div class="pills" id="orgPills"></div></div>
   <div class="pill-group"><span class="pg-label">〔 时间 〕</span><div class="pills" id="timePills"></div></div>
   <div class="pill-group"><span class="pg-label">〔 更新 〕</span><div class="pills" id="updPills"></div></div>
@@ -370,7 +371,7 @@ button{font:inherit;color:inherit}
 </section>
 
 <section id="view-sources" class="page-sec" aria-label="来源">
-  <h2 class="sec-head"><span class="sec-no mono">〔 来源 〕</span><span class="sec-title">14 个监测来源</span></h2>
+  <h2 class="sec-head"><span class="sec-no mono">〔 来源 〕</span><span class="sec-title">__SRC_TOTAL__ 个监测来源</span></h2>
   <p class="sec-note">每家机构一个固定色点，与列表行、来源药丸完全一致——扫颜色认来源。收录条数与最近发布日期按当前库内 __TOTAL__ 条统计；状态为最近一次抓取（__FETCH_TIME__）的结果。</p>
   <div class="src-grid" id="srcGrid"></div>
 </section>
@@ -448,8 +449,9 @@ function classify(a){
   const t = a.t || '';
   for(let i = 0; i < WIN_KW.length; i++){ if(t.indexOf(WIN_KW[i]) > -1) return 'win'; }
   if(a.o === '工业和信息化部' && a.c === '文件公示') return 'win';
-  if(a.c === '政策文件' || a.c === '政策文件库') return 'rule';
-  if(a.c === '要闻动态') return 'wind';
+  if(a.fm === '政策文件' || a.fm === '政策解读') return 'rule';
+  if(a.fm === '互动征集' && (t.indexOf('征求意见') > -1 || t.indexOf('征集') > -1)) return 'rule';
+  if(a.fm === '新闻动态' || a.fm === '数据发布' || a.fm === '互动征集') return 'wind';
   if(a.d && a.d >= FRESH_CUT) return 'fresh';
   return 'end';
 }
@@ -461,7 +463,7 @@ const ZONES = [
   {k:'fresh', name:'刚出炉',   tag:'14 天内发布的通知，还没归进其他区——先扫一眼有没有跟自己有关的。'},
   {k:'win',   name:'别人中了', tag:'公示与名单——看看同行谁拿到了，下一轮就知道往哪使劲。'},
   {k:'rule',  name:'规则变了', tag:'正式政策文件，口径以此为准——申报前先把规则读透。'},
-  {k:'wind',  name:'听风声',   tag:'要闻动态，没有直接的钱和名额——听个动静，判断风向。'},
+  {k:'wind',  name:'听风声',   tag:'新闻、数据、互动类栏目——没有直接的钱和名额，听个动静，判断风向。'},
   {k:'end',   name:'落幕',     tag:'已截止、已过期，或发布较早的通知——归档备查。'}
 ];
 const ZNAME = {}; ZONES.forEach(function(z){ ZNAME[z.k] = z.name; });
@@ -479,7 +481,8 @@ const ORG_COLORS = {
   '通州区人民政府':'#0E7C86',
   '北京市政策兑现专区':'#E8490F',
   '优质中小企业梯度培育平台':'#5F7A1E',
-  '工业和信息化部':'#7C2D12'
+  '工业和信息化部':'#7C2D12',
+  '北京市人民政府':'#8A3324'
 };
 function orgColor(o){ return ORG_COLORS[o] || '#6B5B45'; }
 function orgDot(o, sm){ return '<span class="dot' + (sm ? ' dot-sm' : '') + '" style="background:' + orgColor(o) + '" aria-hidden="true"></span>'; }
@@ -767,14 +770,17 @@ Object.keys(FOUND_MAP).forEach(function(u){
   if(FOUND_MAP[u] === SNAP_TODAY) updCounts.today++;
   else if(FOUND_MAP[u] === YDAY_STR) updCounts.yday++;
 });
-const state = {zone:'', org:'', time:'', upd:'', q:'', favOnly:false, sort:'urgency'};
+const state = {zone:'', fam:'', org:'', time:'', upd:'', q:'', favOnly:false, sort:'urgency'};
+const FAMS = ['政策文件','政策解读','通知公告','新闻动态','数据发布','互动征集','申报项目'];
+const famCounts = {}; FAMS.forEach(function(f){ famCounts[f] = 0; });
+arts.forEach(function(a){ if(famCounts[a.fm] != null) famCounts[a.fm]++; });
 const PAGE = 100;
 let shown = PAGE;
 let currentList = [];
 
 function matchQ(a, q){
   if(!q) return true;
-  const hay = (a.t + ' ' + a.o + ' ' + a.c + ' ' + (a.rg || '') + ' ' + (a.gv || '') + ' ' + (a.fn || '')).toLowerCase();
+  const hay = (a.t + ' ' + a.o + ' ' + a.c + ' ' + (a.fm || '') + ' ' + (a.rg || '') + ' ' + (a.gv || '') + ' ' + (a.fn || '')).toLowerCase();
   return hay.indexOf(q) > -1;
 }
 function timeMatch(a){
@@ -788,6 +794,7 @@ function timeMatch(a){
 function applyFilters(){
   return arts.filter(function(a){
     if(state.zone && a._z !== state.zone) return false;
+    if(state.fam && a.fm !== state.fam) return false;
     if(state.org && a.o !== state.org) return false;
     if(!timeMatch(a)) return false;
     if(state.upd){
@@ -802,6 +809,7 @@ function applyFilters(){
   });
 }
 const zonePillsEl = document.getElementById('zonePills');
+const famPillsEl = document.getElementById('famPills');
 const orgPillsEl = document.getElementById('orgPills');
 const timePillsEl = document.getElementById('timePills');
 const updPillsEl = document.getElementById('updPills');
@@ -823,6 +831,8 @@ function buildPills(el, options, current, onPick){
 function renderPills(){
   const zOpts = [{v:'', label:'全部', count:arts.length}].concat(ZONES.map(function(z){ return {v:z.k, label:z.name, count:zoneCounts[z.k]}; }));
   buildPills(zonePillsEl, zOpts, state.zone, function(v){ state.zone = v; syncFilterUI(); renderLibrary(true); });
+  const fOpts = [{v:'', label:'全部类别', count:arts.length}].concat(FAMS.map(function(f){ return {v:f, label:f, count:famCounts[f]}; }));
+  buildPills(famPillsEl, fOpts, state.fam, function(v){ state.fam = v; syncFilterUI(); renderLibrary(true); });
   const oOpts = [{v:'', label:'全部来源', count:arts.length}].concat(orgList.map(function(x){ return {v:x.o, label:x.o, count:x.n, dot:x.o}; }));
   buildPills(orgPillsEl, oOpts, state.org, function(v){ state.org = v; syncFilterUI(); renderLibrary(true); });
   buildPills(timePillsEl, [
@@ -845,7 +855,7 @@ function syncFilterUI(){
   const ft = document.getElementById('favToggle');
   ft.setAttribute('aria-pressed', state.favOnly ? 'true' : 'false');
   document.getElementById('favCount').textContent = favs.size ? String(favs.size) : '';
-  const any = state.zone || state.org || state.time || state.upd || state.q || state.favOnly;
+  const any = state.zone || state.fam || state.org || state.time || state.upd || state.q || state.favOnly;
   document.getElementById('clearFilters').hidden = !any;
   document.getElementById('libSortNote').textContent = SORT_NOTES[state.sort];
 }
@@ -886,7 +896,7 @@ document.getElementById('favToggle').addEventListener('click', function(){
   syncFilterUI(); renderLibrary(true);
 });
 document.getElementById('clearFilters').addEventListener('click', function(){
-  state.zone = ''; state.org = ''; state.time = ''; state.upd = ''; state.q = ''; state.favOnly = false;
+  state.zone = ''; state.fam = ''; state.org = ''; state.time = ''; state.upd = ''; state.q = ''; state.favOnly = false;
   document.getElementById('libQ').value = '';
   syncFilterUI(); renderLibrary(true);
 });
@@ -902,7 +912,7 @@ renderLibrary(true);
     const off = s.s === 'off';
     const fail = s.s === 'fail';
     return '<article class="src-card"><div class="src-top">' + orgDot(s.o) + '<span class="src-org">' + esc(s.o) + '</span></div>'
-      + '<span class="src-col">〔 ' + esc(s.c) + ' 〕</span>'
+      + '<span class="src-col">〔 ' + esc(s.c) + ' · ' + esc(s.fm || '') + ' 〕</span>'
       + '<div class="src-lines">收录 <b>' + matched.length + ' 条</b><br/>最近发布 ' + (latest || '—') + '</div>'
       + '<span class="src-status' + ((off || fail) ? ' off' : '') + '"><span class="sq" aria-hidden="true"></span>' + (off ? '当前停用' : (fail ? '抓取异常' : '监测中')) + '</span>'
       + '<a class="src-link" href="' + esc(s.u) + '" target="_blank" rel="noopener">栏目首页 ↗</a></article>';
@@ -1039,7 +1049,7 @@ document.addEventListener('click', function(e){
   syncClearBtn();
 });
 function syncClearBtn(){
-  const any = state.zone || state.org || state.time || state.upd || state.q || state.favOnly;
+  const any = state.zone || state.fam || state.org || state.time || state.upd || state.q || state.favOnly;
   document.getElementById('clearFilters').hidden = !any;
 }
 
