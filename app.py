@@ -8,7 +8,10 @@
   「更新」页/专区与全库更新药丸在前端按 f 逐天分组、只增不删 (旧的按天清零口径废弃)
 - f 随 data.json 落盘; 容器文件系统不持久, 重新部署/实例回收后以 seed + found_map.json 重建:
   found_map.json (部署包内, url->f) 记录部署前已核实的真实发现批次, 合并时以它与已有 f 为准 (最早者优先);
-  全新 URL 按启发式打戳: 发布日期早于今天的算历史回填 (f 留空, 不进更新页), 其余打今日戳
+  全新 URL 按启发式打戳: 发布日期在最近 3 天内的打今日戳 (含停机/迁移后补抓的),
+  更早的才算历史回填 (f 留空, 不进更新页) —— 2026-11-11 修正: 原「发布日期早于今天一律不打戳」
+  会把停机期间发布、恢复后补抓到的条目误判为回填而吞掉发现日期 (实例: 2026年度第十一批
+  创新型中小企业名单公告, 2026-11-10 发布, 实际抓到了却没进更新页)
 - 路由: / 页面 / /data.json 当前数据 / /health 健康检查
 - 监听端口: 环境变量 PORT, 没有就 80; 仅 Python 标准库
 """
@@ -150,14 +153,27 @@ def do_fetch():
                     merged["f"] = _earliest(old_f, FOUND_MAP.get(u, ""))
                     items[u] = merged
                 else:
-                    # 第一次被本系统看到: 发布日期早于今天的算历史回填 (fs=发布日期, 不标新);
-                    # 发布于今天或无日期的, 才算今日新发现 (fs=今天)
+                    # 第一次被本系统看到: 发布日期早于今天的算历史回填 (fs=发布日期);
+                    # 发布于今天或无日期的, fs=今天
                     merged = dict(it)
                     d = merged.get("d")
                     merged["fs"] = d if (d and d < today) else today
-                    # f 打戳更严: found_map 有记录用记录; 否则仅当不像历史回填 (无发布日期或发布于今天) 才打今日戳,
-                    # 发布日期早于今天的留空——宁可漏标, 不拿发布日期冒充发现日期
-                    merged["f"] = FOUND_MAP.get(u, "") or (today if (not d or d >= today) else "")
+                    # f 打戳: found_map 有记录用记录 (最早者优先的口径在已有条目分支处理);
+                    # 无发布日期的打今日戳; 有发布日期的, 距今 3 天内 (含未来日期) 视为新发现打今日戳,
+                    # 更早的留空 (历史回填不冒充新发现)。3 天窗口保证停机/迁移后补抓不丢戳,
+                    # 又不让种子深抓的陈年旧文涌进更新页
+                    fm = FOUND_MAP.get(u, "")
+                    if fm:
+                        merged["f"] = fm
+                    elif not d:
+                        merged["f"] = today
+                    else:
+                        try:
+                            gap = (datetime.date.fromisoformat(today)
+                                   - datetime.date.fromisoformat(d)).days
+                        except Exception:
+                            gap = 999
+                        merged["f"] = today if gap <= 3 else ""
                     items[u] = merged
             _state["last_fetch_at"] = now_str()
             # report 的 n 改为库内现存条数 (含历史积累), 与页面 sources 展示一致

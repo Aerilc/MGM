@@ -203,6 +203,46 @@ def parse_list_page(html, page_url, limit=25):
     return out
 
 
+def extract_links_loose(html, page_url):
+    """宽松抽取 (兜底补漏用): 列表页上全部「像文章」的链接, 不要求标题长度达标、
+    不要求标题附近有日期。与 parse_list_page 的差集就是主解析静默漏掉的链接。
+    借鉴开源网站变更监测 (changedetection.io / urlwatch) 的快照对比思路:
+    不迷信单一解析规则, 用第二套独立口径全量对照, 漏掉的当场补入或告警。
+    返回 [{title,url,publish_date}] (publish_date 只能从 URL 里抽, 抽不到为 None;
+    title 可能短于 8 字甚至为空, 由调用方决定补入还是告警)"""
+    out, seen = [], set()
+    base_dir = page_url if page_url.endswith("/") else page_url.rsplit("/", 1)[0] + "/"
+    page_host = urllib.parse.urlparse(page_url).netloc
+    for m in re.finditer(r"<a\b[^>]*href=[\"']([^\"']+)[\"'][^>]*>(.*?)</a>", html, re.S | re.I):
+        href, inner = m.group(1).strip(), m.group(2)
+        if not href or href.startswith(("javascript:", "#", "mailto:")):
+            continue
+        url = urllib.parse.urljoin(page_url, href)
+        if url.rstrip("/") == page_url.rstrip("/"):
+            continue
+        # 只认本站链接: 跨站链接是页眉页脚的站群家具 (如 beijing.gov.cn 机构职能页), 不是本栏目文章
+        if urllib.parse.urlparse(url).netloc != page_host:
+            continue
+        path = urllib.parse.urlparse(url).path
+        fname = path.rsplit("/", 1)[-1]
+        if re.match(r"^index(_\d+)?\.s?html?$", fname):
+            continue  # 分页页/栏目页本身
+        if not re.search(r"\.(s?html?|htm)$", path):
+            continue
+        # 文章特征 (比 parse_list_page 宽一档): t日期_编号 / /年份/ 段 /
+        # 就在本栏目目录下且文件名带数字 (文章页文件名必含日期或编号, 导航页一般没有)
+        if not (re.search(r"t20\d{6}_\d+", path) or re.search(r"/20\d{2}/", path)
+                or (url.startswith(base_dir) and re.search(r"\d", fname))):
+            continue
+        if url in seen:
+            continue
+        seen.add(url)
+        title_m = re.search(r"title=[\"']([^\"']+)[\"']", m.group(0))
+        title = clean_text(title_m.group(1)) if title_m else clean_text(inner)
+        out.append({"title": title, "url": url, "publish_date": parse_date(url)})
+    return out
+
+
 HTML_SOURCES = [
     # (机构, 栏目, 列表页)
     ("北京市经济和信息化局", "通知公告", "https://jxj.beijing.gov.cn/jxdt/tzgg/"),

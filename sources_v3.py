@@ -46,6 +46,28 @@ def _mk(it, org, column):
             "d": it.get("publish_date") or None, "_kind": "article"}
 
 
+_WARNED_URLS = set()  # 同一未解析链接每轮只告警一次, 免被多页重复链接刷屏
+
+
+def _fallback_items(html, page_url, known_urls, org, column):
+    """兜底补漏: 用宽松口径全量抽取列表页链接, 与主解析结果对比——
+    主解析漏掉的 (标题达标) 当场补入; 标题不可用的记日志告警, 不静默丢弃。
+    known_urls: 本页已解析 + 此前已见的 url 集合 (不修改, 返回补入条目列表)"""
+    extra = []
+    for lk in base.extract_links_loose(html, page_url):
+        if lk["url"] in known_urls:
+            continue
+        if len(lk["title"] or "") >= 8:
+            extra.append(_mk(lk, org, column))
+        elif lk["url"] not in _WARNED_URLS:
+            _WARNED_URLS.add(lk["url"])
+            base.log("兜底告警 %s-%s: 列表页有链接未被主解析收录且标题不可用: %s"
+                     % (org, column, lk["url"]))
+    if extra:
+        base.log("兜底补漏 %s-%s: +%d 条 (主解析遗漏)" % (org, column, len(extra)))
+    return extra
+
+
 def scrape_column_deep(org, column, base_url, ext):
     """翻页深抓一个栏目: 首页 + index_1..index_(MAX_PAGES-1), 某页无新增即停"""
     out, seen = [], set()
@@ -64,7 +86,11 @@ def scrape_column_deep(org, column, base_url, ext):
         for it in new:
             seen.add(it["url"])
         out.extend(_mk(it, org, column) for it in new)
-        if not new:
+        fb = _fallback_items(html, url, seen, org, column)
+        for e in fb:
+            seen.add(e["u"])
+        out.extend(fb)
+        if not new and not fb:
             break
         time.sleep(0.2)
     return out
@@ -85,6 +111,9 @@ def scrape_tongzhou():
                     continue
                 seen.add(it["url"])
                 out.append(_mk(it, org, column))
+            for e in _fallback_items(html, u, seen, org, column):
+                seen.add(e["u"])
+                out.append(e)
         except Exception as e:
             last_err = e
         time.sleep(0.2)
@@ -181,9 +210,13 @@ def scrape_miit_lib():
 
 def scrape_wjgs():
     """工信部文件公示: 列表页为壳时返回空 (主流程记为 0, 不拖垮其他来源)"""
-    html = base.http_get("https://www.miit.gov.cn/zwgk/wjgs/index.html", timeout=25)
-    items = base.parse_list_page(html, "https://www.miit.gov.cn/zwgk/wjgs/index.html", limit=PAGE_LIMIT)
-    return [_mk(it, "工业和信息化部", "文件公示") for it in items]
+    url = "https://www.miit.gov.cn/zwgk/wjgs/index.html"
+    html = base.http_get(url, timeout=25)
+    items = base.parse_list_page(html, url, limit=PAGE_LIMIT)
+    out = [_mk(it, "工业和信息化部", "文件公示") for it in items]
+    out.extend(_fallback_items(html, url, {it["url"] for it in items},
+                               "工业和信息化部", "文件公示"))
+    return out
 
 
 def scrape_zjtx_v3():
