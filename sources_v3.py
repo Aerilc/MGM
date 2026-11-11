@@ -24,20 +24,111 @@ import sources as base
 MAX_PAGES = 6          # 每个栏目最多翻页数 (含首页)
 PAGE_LIMIT = 60        # parse_list_page 单页上限
 
-# (机构[分享版口径], 栏目, 列表页, 分页后缀)
-DEEP_SOURCES = [
-    ("北京市经济和信息化局", "通知公告", "https://jxj.beijing.gov.cn/jxdt/tzgg/", ".html"),
-    ("北京市经济和信息化局", "政策文件", "https://jxj.beijing.gov.cn/zwgk/2024zcwj/", ".html"),
-    ("北京市经济和信息化局", "办事通知", "https://jxj.beijing.gov.cn/bsfw/bstz/", ".html"),
-    ("北京市科学技术委员会", "通知公告", "https://kw.beijing.gov.cn/zwgk/tzgg/", ".html"),
-    ("北京市科学技术委员会", "政策文件", "https://kw.beijing.gov.cn/zwgk/zcwj/", ".html"),
-    ("北京市发展和改革委员会", "通知通告", "https://fgw.beijing.gov.cn/gzdt/tztg/", ".htm"),
-    ("北京市发展和改革委员会", "政策文件", "https://fgw.beijing.gov.cn/fgwzwgk/2024zcwj/", ".htm"),
-    ("北京经济技术开发区管委会", "通知公告", "https://kfqgw.beijing.gov.cn/zwgkkfq/tzgg/", ".html"),
-    ("北京经济技术开发区管委会", "政策文件", "https://kfqgw.beijing.gov.cn/zwgkkfq/2024zcwj/", ".html"),
-]
+# 全站监测栏目表 (2026-11-11 按老大要求由"只盯几个栏目"改为全站监测):
+# 六站每个会发带日期文章的栏目都纳入——两轮发现脚本实测 336+389 个候选逐个试抓后
+# 留下的叶子栏目; 剔除: 首页/一级聚合页 (与叶子重复)、专题专栏 (多为陈年微站)、
+# 纯静态页 (机构职能/办事指南手册/价格目录/年报)。
+# (机构, 栏目, 列表页, 分页后缀, 类别, 页深) 类别供页面分类 (fm) 用;
+# 页深: 政策/解读/通知 6 页, 新闻/数据/互动 1-3 页 (通州分页形态未确认, 只取第一页)。
+JXJ = "北京市经济和信息化局"
+KW = "北京市科学技术委员会"
+FGW = "北京市发展和改革委员会"
+KFQ = "北京经济技术开发区管委会"
+TZ = "通州区人民政府"
+MIIT = "工业和信息化部"
 
-TONGZHOU_SUBS = ["tzyw", "bmdt", "jxzdt", "fzxxw", "bjcsfzxb"]
+FULL_SOURCES = [
+    # 经信局
+    (JXJ, "通知公告", "https://jxj.beijing.gov.cn/jxdt/tzgg/", ".html", "通知公告", 6),
+    (JXJ, "政策文件", "https://jxj.beijing.gov.cn/zwgk/2024zcwj/", ".html", "政策文件", 6),
+    (JXJ, "政策解读", "https://jxj.beijing.gov.cn/zwgk/2024zcjd/", ".html", "政策解读", 6),
+    (JXJ, "办事通知", "https://jxj.beijing.gov.cn/bsfw/bstz/", ".html", "通知公告", 3),
+    (JXJ, "采购公告", "https://jxj.beijing.gov.cn/zwgk/zfcggg/", ".html", "通知公告", 3),
+    (JXJ, "人事信息", "https://jxj.beijing.gov.cn/zwgk/rsxx/", ".html", "通知公告", 3),
+    (JXJ, "财政预决算", "https://jxj.beijing.gov.cn/zwgk/czyjs/", ".html", "通知公告", 2),
+    (JXJ, "应急管理", "https://jxj.beijing.gov.cn/zwgk/jyjgl/", ".html", "通知公告", 2),
+    (JXJ, "规划计划", "https://jxj.beijing.gov.cn/zwgk/ghjh/", ".html", "政策文件", 3),
+    # 经信局页上的「中央精神/北京要闻」是跳转市政府门户的壳, 真栏目在 beijing.gov.cn, 归北京市人民政府
+    ("北京市人民政府", "中央精神", "https://www.beijing.gov.cn/ywdt/dzyjs/", ".html", "新闻动态", 2),
+    ("北京市人民政府", "北京要闻", "https://www.beijing.gov.cn/ywdt/yaowen/", ".html", "新闻动态", 2),
+    (JXJ, "热点聚焦", "https://jxj.beijing.gov.cn/jxdt/zwyw/", ".html", "新闻动态", 3),
+    (JXJ, "工作动态", "https://jxj.beijing.gov.cn/jxdt/gzdt/", ".html", "新闻动态", 3),
+    (JXJ, "专精特新", "https://jxj.beijing.gov.cn/hyjj/zjtx/", ".html", "新闻动态", 3),
+    (JXJ, "伙伴计划", "https://jxj.beijing.gov.cn/ztzl/ywzt/hbjh/", ".html", "新闻动态", 2),
+    (JXJ, "经济运行", "https://jxj.beijing.gov.cn/jxsj/jjyx/", ".html", "数据发布", 3),
+    (JXJ, "办事统计", "https://jxj.beijing.gov.cn/bsfw/bstj/", ".html", "数据发布", 2),
+    (JXJ, "留言统计", "https://jxj.beijing.gov.cn/zmhd/gzlxtj/", ".html", "数据发布", 1),
+    (JXJ, "意见征集", "https://jxj.beijing.gov.cn/zmhd/yjzj/", ".html", "互动征集", 3),
+    (JXJ, "视频访谈", "https://jxj.beijing.gov.cn/zmhd/xwfb/", ".html", "互动征集", 2),
+    # 科委
+    (KW, "通知公告", "https://kw.beijing.gov.cn/zwgk/tzgg/", ".html", "通知公告", 6),
+    (KW, "政策文件", "https://kw.beijing.gov.cn/zwgk/zcwj/", ".html", "政策文件", 6),
+    (KW, "政策解读", "https://kw.beijing.gov.cn/zwgk/zcjd/", ".html", "政策解读", 6),
+    (KW, "规划信息", "https://kw.beijing.gov.cn/zwgk/ghxx/", ".html", "政策文件", 3),
+    (KW, "办事结果", "https://kw.beijing.gov.cn/zwfw/bsjg/", ".html", "通知公告", 3),
+    (KW, "工作动态", "https://kw.beijing.gov.cn/xwdt/bmdt/", ".html", "新闻动态", 3),
+    (KW, "媒体报道", "https://kw.beijing.gov.cn/xwdt/mtbd/", ".html", "新闻动态", 2),
+    (KW, "热点转载", "https://kw.beijing.gov.cn/xwdt/rdzz/", ".html", "新闻动态", 2),
+    (KW, "科创活动", "https://kw.beijing.gov.cn/xwdt/kcyx/kcyxkchd/", ".html", "新闻动态", 2),
+    (KW, "产业发展", "https://kw.beijing.gov.cn/xwdt/kcyx/xwdtcyfz/", ".html", "新闻动态", 2),
+    (KW, "开放合作", "https://kw.beijing.gov.cn/xwdt/kcyx/xwdtkfhz/", ".html", "新闻动态", 2),
+    (KW, "科技前沿", "https://kw.beijing.gov.cn/xwdt/kcyx/xwdtkjqy/", ".html", "新闻动态", 2),
+    (KW, "三城一区", "https://kw.beijing.gov.cn/xwdt/kcyx/xwdtscyqld/", ".html", "新闻动态", 2),
+    (KW, "深化改革", "https://kw.beijing.gov.cn/xwdt/kcyx/xwdtshgg/", ".html", "新闻动态", 2),
+    (KW, "园区企业", "https://kw.beijing.gov.cn/xwdt/kcyx/xwdtyqqy/", ".html", "新闻动态", 2),
+    (KW, "科技成果转化", "https://kw.beijing.gov.cn/ztzl/kjcgzh/", ".html", "新闻动态", 2),
+    (KW, "数据发布", "https://kw.beijing.gov.cn/zwgk/sjfb/", ".html", "数据发布", 2),
+    (KW, "调查征集", "https://kw.beijing.gov.cn/zmhd/dczj/", ".html", "互动征集", 3),
+    (KW, "调查反馈", "https://kw.beijing.gov.cn/zmhd/dcfk/", ".html", "互动征集", 2),
+    # 发改委
+    (FGW, "通知通告", "https://fgw.beijing.gov.cn/gzdt/tztg/", ".htm", "通知公告", 6),
+    (FGW, "政策文件", "https://fgw.beijing.gov.cn/fgwzwgk/2024zcwj/", ".htm", "政策文件", 6),
+    (FGW, "政策解读", "https://fgw.beijing.gov.cn/fgwzwgk/2024zcjd/", ".htm", "政策解读", 6),
+    (FGW, "依申请转主动公开", "https://fgw.beijing.gov.cn/fgwzwgk/ysqzzdgk/", ".htm", "通知公告", 3),
+    (FGW, "行政许可公示", "https://fgw.beijing.gov.cn/fzggzl/yfxz/", ".htm", "通知公告", 3),
+    (FGW, "发改之声", "https://fgw.beijing.gov.cn/gzdt/fgzs/", ".htm", "新闻动态", 3),
+    (FGW, "发展北京", "https://fgw.beijing.gov.cn/gzdt/fzbjgzh/", ".htm", "新闻动态", 2),
+    (FGW, "区域合作", "https://fgw.beijing.gov.cn/fzggzl/zyhz/", ".htm", "新闻动态", 2),
+    (FGW, "调查征集", "https://fgw.beijing.gov.cn/zmhd/dczj/", ".htm", "互动征集", 3),
+    # 经开区
+    (KFQ, "通知公告", "https://kfqgw.beijing.gov.cn/zwgkkfq/tzgg/", ".html", "通知公告", 6),
+    (KFQ, "政策文件", "https://kfqgw.beijing.gov.cn/zwgkkfq/2024zcwj/", ".html", "政策文件", 6),
+    (KFQ, "政策解读", "https://kfqgw.beijing.gov.cn/zwgkkfq/2024zcjd/", ".html", "政策解读", 6),
+    (KFQ, "计划规划", "https://kfqgw.beijing.gov.cn/zwgkkfq/ghjh/", ".html", "政策文件", 2),
+    (KFQ, "头条", "https://kfqgw.beijing.gov.cn/ywdt/tt/", ".html", "新闻动态", 2),
+    (KFQ, "工作动态", "https://kfqgw.beijing.gov.cn/ywdt/gzdt/", ".html", "新闻动态", 3),
+    (KFQ, "科技成果转化高地", "https://kfqgw.beijing.gov.cn/ywdt/kjcgzhgd/", ".html", "新闻动态", 2),
+    (KFQ, "高端产业发展高地", "https://kfqgw.beijing.gov.cn/ywdt/gdcyfzgd/", ".html", "新闻动态", 2),
+    (KFQ, "对外开放高地", "https://kfqgw.beijing.gov.cn/ywdt/dwkfgd/", ".html", "新闻动态", 2),
+    (KFQ, "高水平人才高地", "https://kfqgw.beijing.gov.cn/ywdt/gsprcgd/", ".html", "新闻动态", 2),
+    (KFQ, "创新展示", "https://kfqgw.beijing.gov.cn/cxyzkfq/yzal/", ".html", "新闻动态", 2),
+    (KFQ, "创新举措", "https://kfqgw.beijing.gov.cn/cxyzkfq/cxcg/", ".html", "新闻动态", 2),
+    (KFQ, "数据发布", "https://kfqgw.beijing.gov.cn/zwgkkfq/sj/", ".html", "数据发布", 2),
+    (KFQ, "办事统计", "https://kfqgw.beijing.gov.cn/zwfwkfq/bstj/", ".html", "数据发布", 2),
+    (KFQ, "意见征集", "https://kfqgw.beijing.gov.cn/zmhdkfq/yjzj/", ".html", "互动征集", 3),
+    (KFQ, "常见问题", "https://kfqgw.beijing.gov.cn/zmhdkfq/cjwt/", ".html", "互动征集", 2),
+    (KFQ, "在线访谈", "https://kfqgw.beijing.gov.cn/zmhdkfq/zxft/", ".html", "互动征集", 2),
+    # 通州 (分页形态未确认, 只取第一页)
+    (TZ, "通知公告", "https://www.bjtzh.gov.cn/bjtz/zwgk/tzgg/", ".shtml", "通知公告", 1),
+    (TZ, "政策文件", "https://www.bjtzh.gov.cn/bjtz/zwgk/zcwj/", ".shtml", "政策文件", 1),
+    (TZ, "政策解读", "https://www.bjtzh.gov.cn/bjtz/zwgk/zcjd/", ".shtml", "政策解读", 1),
+    (TZ, "通州动态", "https://www.bjtzh.gov.cn/bjtz/ywdt/tzyw/", ".shtml", "新闻动态", 1),
+    (TZ, "部门动态", "https://www.bjtzh.gov.cn/bjtz/ywdt/bmdt/", ".shtml", "新闻动态", 1),
+    (TZ, "街乡镇动态", "https://www.bjtzh.gov.cn/bjtz/ywdt/jxzdt/", ".shtml", "新闻动态", 1),
+    (TZ, "副中心新闻", "https://www.bjtzh.gov.cn/bjtz/ywdt/fzxxw/", ".shtml", "新闻动态", 1),
+    (TZ, "热点关注", "https://www.bjtzh.gov.cn/bjtz/ywdt/rdgz/", ".shtml", "新闻动态", 1),
+    (TZ, "会议信息", "https://www.bjtzh.gov.cn/bjtz/zwgk/hyxx/", ".shtml", "新闻动态", 1),
+    (TZ, "回应关切", "https://www.bjtzh.gov.cn/bjtz/zwgk/hygq/", ".shtml", "新闻动态", 1),
+    (TZ, "冬季供暖", "https://www.bjtzh.gov.cn/bjtz/ztzl/2026-2027nddjgn/", ".shtml", "通知公告", 1),
+    (TZ, "政务服务中心", "https://www.bjtzh.gov.cn/bjtz/ztzl/csfzxzwfwzx/", ".shtml", "通知公告", 1),
+    (TZ, "开放数据", "https://www.bjtzh.gov.cn/bjtz/zwgk/kfsj/", ".shtml", "数据发布", 1),
+    (TZ, "办事服务数据", "https://www.bjtzh.gov.cn/bjtz/zwfw/bsfwsj71/", ".shtml", "数据发布", 1),
+    (TZ, "留言统计", "https://www.bjtzh.gov.cn/bjtz/zwfw/lytjsjwz/", ".shtml", "数据发布", 1),
+    (TZ, "意见征集", "https://www.bjtzh.gov.cn/bjtz/zmhd/zcxwjyjzj/", ".shtml", "互动征集", 1),
+    (TZ, "政务直播", "https://www.bjtzh.gov.cn/bjtz/zmhd/fzxzwfwyzb/", ".shtml", "互动征集", 1),
+    # 工信部
+    (MIIT, "新闻发布", "https://www.miit.gov.cn/xwfb/xwfbh/", ".html", "新闻动态", 2),
+]
 DECLARE_ORG = "北京市政策兑现专区"
 
 
@@ -68,10 +159,10 @@ def _fallback_items(html, page_url, known_urls, org, column):
     return extra
 
 
-def scrape_column_deep(org, column, base_url, ext):
-    """翻页深抓一个栏目: 首页 + index_1..index_(MAX_PAGES-1), 某页无新增即停"""
+def scrape_column_deep(org, column, base_url, ext, max_pages=None):
+    """翻页深抓一个栏目: 首页 + index_1..index_(页深-1), 某页无新增即停"""
     out, seen = [], set()
-    for n in range(MAX_PAGES):
+    for n in range(MAX_PAGES if max_pages is None else max_pages):
         url = base_url if n == 0 else "%sindex_%d%s" % (base_url, n, ext)
         try:
             html = base.http_get(url, timeout=25)
@@ -93,32 +184,6 @@ def scrape_column_deep(org, column, base_url, ext):
         if not new and not fb:
             break
         time.sleep(0.2)
-    return out
-
-
-def scrape_tongzhou():
-    """通州要闻动态: 聚合页 + 子频道首页 (各约15条), 合并去重"""
-    org, column = "通州区人民政府", "要闻动态"
-    urls = ["https://www.bjtzh.gov.cn/bjtz/ywdt/index.shtml"] + [
-        "https://www.bjtzh.gov.cn/bjtz/ywdt/%s/index.shtml" % s for s in TONGZHOU_SUBS]
-    out, seen = [], set()
-    last_err = None
-    for u in urls:
-        try:
-            html = base.http_get(u, timeout=25)
-            for it in base.parse_list_page(html, u, limit=PAGE_LIMIT):
-                if it["url"] in seen:
-                    continue
-                seen.add(it["url"])
-                out.append(_mk(it, org, column))
-            for e in _fallback_items(html, u, seen, org, column):
-                seen.add(e["u"])
-                out.append(e)
-        except Exception as e:
-            last_err = e
-        time.sleep(0.2)
-    if not out and last_err:
-        raise last_err
     return out
 
 
@@ -197,7 +262,25 @@ def scrape_declare_v3():
 
 
 def scrape_miit_lib():
-    raw = base.scrape_miit_search(max_items=300)
+    """工信部政策文件库: 其搜索接口偶发长时间无响应 (2026-11-11 实测挂起 10 分钟+),
+    故给整源加 150 秒硬截止: 超时按失败处理、库内旧条目保留, 不拖住整轮抓取"""
+    import threading
+    box = {}
+
+    def work():
+        try:
+            box["raw"] = base.scrape_miit_search(max_items=300)
+        except Exception as e:  # noqa: BLE001
+            box["err"] = e
+
+    th = threading.Thread(target=work, daemon=True)
+    th.start()
+    th.join(150)
+    if th.is_alive():
+        raise RuntimeError("工信部政策文件库接口 150 秒未响应, 本轮跳过")
+    if "err" in box:
+        raise box["err"]
+    raw = box.get("raw") or []
     out = []
     for it in raw:
         d = {"t": it["title"], "u": it["url"], "o": "工业和信息化部", "c": "政策文件库",
@@ -265,19 +348,9 @@ def scrape_zjtx_v3():
     return out
 
 
-# 监测来源清单 (与分享版 sources 口径一致): (机构, 栏目, 栏目首页)
-SOURCE_DEFS = [
-    ("北京市经济和信息化局", "通知公告", "https://jxj.beijing.gov.cn/jxdt/tzgg/"),
-    ("北京市经济和信息化局", "政策文件", "https://jxj.beijing.gov.cn/zwgk/2024zcwj/"),
-    ("北京市经济和信息化局", "办事通知", "https://jxj.beijing.gov.cn/bsfw/bstz/"),
-    ("北京市科学技术委员会", "通知公告", "https://kw.beijing.gov.cn/zwgk/tzgg/"),
-    ("北京市科学技术委员会", "政策文件", "https://kw.beijing.gov.cn/zwgk/zcwj/"),
-    ("北京市发展和改革委员会", "通知通告", "https://fgw.beijing.gov.cn/gzdt/tztg/"),
-    ("北京市发展和改革委员会", "政策文件", "https://fgw.beijing.gov.cn/fgwzwgk/2024zcwj/"),
-    ("北京经济技术开发区管委会", "通知公告", "https://kfqgw.beijing.gov.cn/zwgkkfq/tzgg/"),
-    ("北京经济技术开发区管委会", "政策文件", "https://kfqgw.beijing.gov.cn/zwgkkfq/2024zcwj/"),
+# 监测来源清单: (机构, 栏目, 栏目首页) —— 全站栏目 + 4 个接口型特殊源
+SOURCE_DEFS = [(o, n, u) for (o, n, u, _e, _f, _p) in FULL_SOURCES] + [
     ("优质中小企业梯度培育平台", "部级公告", "https://zjtx.miit.gov.cn/zxqySy/tzggMore"),
-    ("通州区人民政府", "要闻动态", "https://www.bjtzh.gov.cn/bjtz/ywdt/index.shtml"),
     (DECLARE_ORG, "项目申报", "https://zhengce.beijing.gov.cn/#/declare"),
     ("工业和信息化部", "政策文件库", "https://wap.miit.gov.cn/search/zcwjk.html"),
     ("工业和信息化部", "文件公示", "https://www.miit.gov.cn/zwgk/wjgs/index.html"),
@@ -285,32 +358,33 @@ SOURCE_DEFS = [
 
 
 def collect_all():
-    """抓全部来源; 返回 (items, report)
-    report: [{"o":机构,"c":栏目,"n":条数,"ok":bool}] 与 SOURCE_DEFS 同序"""
-    jobs = {}
-    for org, column, _u in SOURCE_DEFS:
-        jobs[(org, column)] = None
+    """抓全部来源 (全站监测, 8 线程并发); 返回 (items, report)
+    report: [{"o":机构,"c":栏目,"n":条数,"ok":bool}] 与 SOURCE_DEFS 同序;
+    合并去重按 SOURCE_DEFS 顺序, 同一 URL 以靠前栏目归属为准 (归属稳定)"""
+    from concurrent.futures import ThreadPoolExecutor
     runners = []
-    for org, column, _url, ext in DEEP_SOURCES:
+    for org, column, url, ext, fam, pages in FULL_SOURCES:
         runners.append((org, column,
-                        (lambda o, c, u, e: lambda: scrape_column_deep(o, c, u, e))(org, column, _url, ext)))
-    runners.append(("通州区人民政府", "要闻动态", scrape_tongzhou))
+                        (lambda o, c, u, e, p: lambda: scrape_column_deep(
+                            o, c, u, e, max_pages=p))(org, column, url, ext, pages)))
     runners.append(("优质中小企业梯度培育平台", "部级公告", scrape_zjtx_v3))
     runners.append((DECLARE_ORG, "项目申报", scrape_declare_v3))
     runners.append(("工业和信息化部", "政策文件库", scrape_miit_lib))
     runners.append(("工业和信息化部", "文件公示", scrape_wjgs))
 
-    got = {}
-    for org, column, fn in runners:
-        label = "%s-%s" % (org, column)
+    def run(rc):
+        org, column, fn = rc
         try:
             items = fn()
-            got[(org, column)] = items
-            base.log("抓取成功 %s: %d 条" % (label, len(items)))
+            base.log("抓取成功 %s-%s: %d 条" % (org, column, len(items)))
+            return (org, column, items)
         except Exception as e:
-            got[(org, column)] = None
-            base.log("抓取失败 %s: %s" % (label, str(e)[:160]))
+            base.log("抓取失败 %s-%s: %s" % (org, column, str(e)[:160]))
+            return (org, column, None)
 
+    with ThreadPoolExecutor(max_workers=8) as ex:
+        results = list(ex.map(run, runners))
+    got = {(o, c): items for o, c, items in results}
     all_items, report = [], []
     for org, column, _u in SOURCE_DEFS:
         items = got.get((org, column))
@@ -319,7 +393,6 @@ def collect_all():
         else:
             report.append({"o": org, "c": column, "n": len(items), "ok": True})
             all_items.extend(items)
-    # 全局按链接去重
     dedup, seen = [], set()
     for it in all_items:
         if it["u"] in seen:
