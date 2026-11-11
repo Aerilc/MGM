@@ -204,6 +204,38 @@ def refresh_loop():
         do_fetch()
 
 
+# ---------------- 类别 (fm): 全站监测后栏目近 90 个, 按类别归拢方便筛选 ----------------
+FAMILY_BY_SOURCE = {}
+for (_o, _n, _u, _e, _f, _p) in sources_v3.FULL_SOURCES:
+    FAMILY_BY_SOURCE[(_o, _n)] = _f
+FAMILY_BY_SOURCE[("工业和信息化部", "政策文件库")] = "政策文件"
+FAMILY_BY_SOURCE[("工业和信息化部", "文件公示")] = "通知公告"
+FAMILY_BY_SOURCE[("优质中小企业梯度培育平台", "部级公告")] = "通知公告"
+
+
+def family_of(org, col):
+    """(机构,栏目) -> 类别; 表里没有的 (历史栏目名) 按栏目名关键词兜底"""
+    if org == DECLARE_ORG:
+        return "申报项目"
+    fam = FAMILY_BY_SOURCE.get((org, col))
+    if fam:
+        return fam
+    c = col or ""
+    if "解读" in c:
+        return "政策解读"
+    if any(k in c for k in ("数据", "统计", "经济运行")):
+        return "数据发布"
+    if any(k in c for k in ("征集", "访谈", "互动", "调查", "问题", "直播")):
+        return "互动征集"
+    if any(k in c for k in ("文件", "规划", "计划")):
+        return "政策文件"
+    if any(k in c for k in ("新闻", "动态", "要闻", "聚焦", "报道", "转载", "头条",
+                            "高地", "展示", "举措", "活动", "之声", "发展", "合作",
+                            "前沿", "改革", "园区", "转化", "发布")):
+        return "新闻动态"
+    return "通知公告"
+
+
 # ---------------- 数据组装 (现行分享版 DATA 口径) ----------------
 
 def build_data():
@@ -220,6 +252,7 @@ def build_data():
 
     def pub(it):
         d = {k: v for k, v in it.items() if k not in ("fs", "_kind") and v is not None}
+        d["fm"] = family_of(it.get("o", ""), it.get("c", ""))
         if not d.get("f"):
             d.pop("f", None)  # 无发现日期的条目不带 f 字段 (前端据此不进更新页)
         return d
@@ -244,7 +277,8 @@ def build_data():
         for r in report:
             sources_list.append({"o": r["o"], "c": r["c"],
                                  "u": url_by_key.get((r["o"], r["c"]), ""),
-                                 "n": r["n"], "s": "ok" if r["ok"] else "fail"})
+                                 "n": r["n"], "s": "ok" if r["ok"] else "fail",
+                                 "fm": family_of(r["o"], r["c"])})
     else:
         counts = {}
         for it in items:
@@ -252,7 +286,8 @@ def build_data():
             counts[k] = counts.get(k, 0) + 1
         for org, column, u in sources_v3.SOURCE_DEFS:
             sources_list.append({"o": org, "c": column, "u": u,
-                                 "n": counts.get((org, column), 0), "s": "ok"})
+                                 "n": counts.get((org, column), 0), "s": "ok",
+                                 "fm": family_of(org, column)})
     data = {"articles": articles, "sources": sources_list, "notifications": notifications}
     meta = {
         "total": len(articles),
@@ -283,7 +318,8 @@ def render_page():
                                   - datetime.timedelta(days=1)).isoformat())
             .replace("__UPDATE_DATE__", meta["today"])
             .replace("__FETCH_TIME__", meta["last_fetch"] or "尚未完成首抓")
-            .replace("__SRC_SUMMARY__", src_summary))
+            .replace("__SRC_SUMMARY__", src_summary)
+            .replace("__SRC_TOTAL__", str(meta["src_total"])))
     return html
 
 
