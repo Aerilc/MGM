@@ -174,7 +174,8 @@ def clean_text(s):
 def parse_list_page(html, page_url, limit=25):
     """从政府网站栏目列表页抽文章: 返回 [{title,url,publish_date}] 按页面顺序"""
     out, seen = [], set()
-    for m in re.finditer(r"<a\b[^>]*href=[\"']([^\"']+)[\"'][^>]*>(.*?)</a>", html, re.S | re.I):
+    matches = list(re.finditer(r"<a\b[^>]*href=[\"']([^\"']+)[\"'][^>]*>(.*?)</a>", html, re.S | re.I))
+    for i, m in enumerate(matches):
         href, inner = m.group(1).strip(), m.group(2)
         if not href or href.startswith(("javascript:", "#", "mailto:")):
             continue
@@ -194,9 +195,27 @@ def parse_list_page(html, page_url, limit=25):
         if url in seen:
             continue
         seen.add(url)
-        # 日期: 先在链接前后 400 字里找, 再从 URL 里抽
-        window = html[max(0, m.start() - 200): m.end() + 400]
-        pub = parse_date(window) or parse_date(url)
+        # 日期只认本条自己的, 绝不取邻条的 (2026-11-13 修正): 旧逻辑在链接前后
+        # ±200/400 字窗口里取第一个日期, 列表按时间倒序时上一条的日期正好落在
+        # 窗口前段, 会把上一条 (更新) 的日期错配给本条, 且随文章在列表里下沉
+        # 逐日漂移 (实例: 发改委节能降碳征集通知 11-06 被漂成 11-11、11-12)。
+        # 取序: ①链接之后、下一条链接之前的行尾 (本条日期通常在此)
+        #       ②链接所在的 <li>/<tr> 整行 (日期在标题前面的版式)
+        #       ③URL 自带日期 (政府 CMS 的 tYYYYMMDD 即文章生成日)
+        pub = None
+        nxt = matches[i + 1].start() if i + 1 < len(matches) else m.end() + 400
+        pub = parse_date(html[m.end(): min(nxt, m.end() + 400)])
+        if not pub:
+            li_s = max(html.rfind("<li", 0, m.start()), html.rfind("<tr", 0, m.start()))
+            li_e = len(html)
+            for closer in ("</li>", "</tr>"):
+                p = html.find(closer, m.end())
+                if p >= 0:
+                    li_e = min(li_e, p)
+            if li_s >= 0 and li_e - li_s < 1500:
+                pub = parse_date(html[li_s:li_e])
+        if not pub:
+            pub = parse_date(url)
         out.append({"title": title, "url": url, "publish_date": pub})
         if len(out) >= limit:
             break
