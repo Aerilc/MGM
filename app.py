@@ -146,6 +146,14 @@ def do_fetch():
                     merged["fs"] = items[u].get("fs", "")
                     # f 永不覆盖: 已有戳与 found_map 取最早者
                     merged["f"] = _earliest(items[u].get("f", ""), FOUND_MAP.get(u, ""))
+                    # 发布日期 d 同理永不往后改 (2026-11-13 修正): 文章发布日期是
+                    # 定死的, 后续抓取偶把邻条日期错配进来 (列表页窗口取日期),
+                    # 一旦覆盖就会逐日漂移、把旧文冒充成新发 (实例: 发改委节能降碳
+                    # 征集通知 2026-11-06 被漂成 11-12 并窜进「刚出炉」)。
+                    # 已存 d 与本次取较早者; 已存为空才用本次的。
+                    old_d = items[u].get("d")
+                    if old_d:
+                        merged["d"] = _earliest(old_d, merged.get("d"))
                     items[u] = merged
                 elif u in dec_fs_backup:
                     merged = dict(it)
