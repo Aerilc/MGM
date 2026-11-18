@@ -48,10 +48,7 @@ FULL_SOURCES = [
     (JXJ, "财政预决算", "https://jxj.beijing.gov.cn/zwgk/czyjs/", ".html", "通知公告", 2),
     (JXJ, "应急管理", "https://jxj.beijing.gov.cn/zwgk/jyjgl/", ".html", "通知公告", 2),
     (JXJ, "规划计划", "https://jxj.beijing.gov.cn/zwgk/ghjh/", ".html", "政策文件", 3),
-    # 经信局页上的「中央精神/北京要闻」是跳转市政府门户的壳, 真栏目在 beijing.gov.cn, 归北京市人民政府
-    ("北京市人民政府", "中央精神", "https://www.beijing.gov.cn/ywdt/dzyjs/", ".html", "新闻动态", 2),
-    ("北京市人民政府", "北京要闻", "https://www.beijing.gov.cn/ywdt/yaowen/", ".html", "新闻动态", 2),
-    (JXJ, "热点聚焦", "https://jxj.beijing.gov.cn/jxdt/zwyw/", ".html", "新闻动态", 3),
+    # 2026-11-18 按老大要求停监测: 北京市人民政府「中央精神/北京要闻」与经信局「热点聚焦」三栏已移除
     (JXJ, "工作动态", "https://jxj.beijing.gov.cn/jxdt/gzdt/", ".html", "新闻动态", 3),
     (JXJ, "专精特新", "https://jxj.beijing.gov.cn/hyjj/zjtx/", ".html", "新闻动态", 3),
     (JXJ, "伙伴计划", "https://jxj.beijing.gov.cn/ztzl/ywzt/hbjh/", ".html", "新闻动态", 2),
